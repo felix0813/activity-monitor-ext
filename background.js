@@ -1,6 +1,13 @@
 // background.js (MV3 service worker)
 // Responsibilities remain the same but Native Messaging removed
-
+// 在文件顶部添加
+chrome.runtime.onStartup.addListener(() => {
+  console.log('Activity Monitor extension started');
+});
+// 添加扩展安装/更新处理
+chrome.runtime.onInstalled.addListener((details) => {
+  console.log('Activity Monitor extension installed/updated', details.reason);
+});
 importScripts('idb.js') // load idb helper
 
 const FLUSH_INTERVAL_MS = 15000 // batch flush interval
@@ -198,27 +205,68 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true
   }
 })
+// 在 computeStats 函数中增强对 active_period 的处理
+async function computeStats () {
+  try {
+    const all = await idbGetAll();
+    const stats = {
+      total_events: all ? all.length : 0,
+      events_by_type: {},
+      active_time_by_url: {},
+      total_active_time: 0 // 添加总活跃时间统计
+    };
+
+    if (!all || !Array.isArray(all)) {
+      return stats;
+    }
+
+    for (const e of all) {
+      if (!e) continue;
+
+      const t = (e.type || 'unknown').toString();
+      stats.events_by_type[t] = (stats.events_by_type[t] || 0) + 1;
+
+      if (t === 'active_period' && typeof e.duration === 'number') {
+        const u = (e.url || 'unknown').toString();
+        stats.active_time_by_url[u] = (stats.active_time_by_url[u] || 0) + e.duration;
+        stats.total_active_time += e.duration;
+      }
+    }
+    return stats;
+  } catch (e) {
+    console.error('Error computing stats:', e);
+    throw new Error(`Failed to compute stats: ${e.message}`);
+  }
+}
 // 检测网络状态变化
 let isOnline = navigator.onLine
 
-window.addEventListener('online', () => {
-  console.log('Network connection restored')
-  isOnline = true
-  // 网络恢复时立即尝试重连
-  if (!wsConnected) {
-    reconnectAttempts = 0
-    connectWebSocket()
+chrome.runtime.onStartup.addListener(() => {
+  // 检查网络状态
+  if (navigator.onLine) {
+    console.log('Extension started with network connection');
+    reconnectAttempts = 0;
+    connectWebSocket();
+  } else {
+    console.log('Extension started without network connection');
   }
-})
+});
 
-window.addEventListener('offline', () => {
-  console.log('Network connection lost')
-  isOnline = false
-  // 断开WebSocket连接
-  if (ws) {
-    ws.close()
+// 可以通过定期检查网络状态来替代 online/offline 事件
+setInterval(() => {
+  const currentlyOnline = navigator.onLine;
+  if (currentlyOnline !== isOnline) {
+    isOnline = currentlyOnline;
+    console.log(`Network status changed: ${isOnline ? 'Online' : 'Offline'}`);
+
+    if (isOnline && !wsConnected) {
+      reconnectAttempts = 0;
+      connectWebSocket();
+    } else if (!isOnline && ws) {
+      ws.close();
+    }
   }
-})
+}, 5000); // 每5秒检查一次网络状态
 // --------------------- 页面 session 监听 ---------------------
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   try {
