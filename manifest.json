@@ -2,14 +2,15 @@
   "manifest_version": 3,
   "name": "Activity Monitor (Minimal)",
   "version": "0.1.0",
-  "description": "Collect page active time, interactions and send batches to native app / cache locally.",
+  "description": "Collect page active time, interactions and send batches via HTTP/WebSocket or cache locally.",
   "permissions": [
     "storage",
     "scripting",
     "activeTab"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "<all_urls>",
+    "http://127.0.0.1:5000/*"
   ],
   "background": {
     "service_worker": "background.js"
