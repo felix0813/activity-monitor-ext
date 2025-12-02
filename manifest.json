@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Activity Monitor (Minimal)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Collect page active time, interactions and send batches via HTTP/WebSocket or cache locally.",
   "permissions": [
     "storage",
