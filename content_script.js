@@ -4,24 +4,36 @@
 // Sends events to background via chrome.runtime.sendMessage
 
 (function () {
-  function makeEvent(type, extra = {}) {
+  let currentSessionId = null;
+  let currentTabId = null;
+
+  // 请求获取当前 tab 的 session 信息
+  chrome.runtime.sendMessage({ type: 'get_session_info' }, (response) => {
+    if (response && response.sessionId) {
+      currentSessionId = response.sessionId;
+      currentTabId = response.tabId;
+    }
+  });
+  function makeEvent (type, extra = {}) {
     return Object.assign({
       event_id: uuidv4(),
       type,
       ts: Date.now(),
       url: location.href,
-      title: document.title || ''
+      title: document.title || '',
+      session_id: currentSessionId,
+      tab_id: currentTabId
     }, extra);
   }
-function uuidv4() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
+  function uuidv4 () {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
   // Send to background
-  function send(e) {
+  function send (e) {
     try {
       chrome.runtime.sendMessage({ type: 'record_event', event: e });
     } catch (err) {
@@ -32,12 +44,12 @@ function uuidv4() {
 
   // Track "active" periods using visibility + focus
   let activeStart = null;
-  function startActiveIfNeeded() {
+  function startActiveIfNeeded () {
     if (document.visibilityState === 'visible' && document.hasFocus() && !activeStart) {
       activeStart = Date.now();
     }
   }
-  function stopActiveIfRunning() {
+  function stopActiveIfRunning () {
     if (activeStart) {
       const duration = Date.now() - activeStart;
       send(makeEvent('active_period', { duration })); // duration in ms
@@ -88,12 +100,12 @@ function uuidv4() {
     try {
       const closeEvt = makeEvent('page_close');
       chrome.runtime.sendMessage({ type: 'record_event', event: closeEvt });
-    } catch (e) {}
+    } catch (e) { }
   });
 
   // low-frequency interaction sampling
   let lastInteraction = 0;
-  function sampleInteraction(e) {
+  function sampleInteraction (e) {
     const now = Date.now();
     if (now - lastInteraction < 1000) return; // 1s downsample
     lastInteraction = now;
@@ -114,7 +126,7 @@ function uuidv4() {
         const viewH = window.innerHeight || document.documentElement.clientHeight;
         const depth = Math.min(100, Math.round((scrollTop + viewH) / Math.max(1, height) * 100));
         payload.scroll_depth = depth;
-      } catch (err) {}
+      } catch (err) { }
     }
     send(makeEvent(e.type, payload));
   }

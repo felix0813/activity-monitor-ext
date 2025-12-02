@@ -180,6 +180,7 @@ async function flushBatch () {
   }
 }
 // --------------------- 内容脚本消息监听 ---------------------
+// 在 chrome.runtime.onMessage.addListener 中添加新的消息处理
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === 'record_event' && msg.event) {
     try {
@@ -203,6 +204,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .then((st) => sendResponse({ status: 'ok', stats: st }))
       .catch((e) => sendResponse({ status: 'error', message: e.toString() }))
     return true
+  } else if (msg && msg.type === 'get_session_info') {
+    // 返回当前 tab 的 session 信息
+    const tabId = sender.tab?.id;
+    if (tabId && pageSessions[tabId]) {
+      sendResponse({
+        sessionId: pageSessions[tabId].sessionId,
+        tabId: tabId
+      });
+    } else {
+      sendResponse({ sessionId: null, tabId: tabId });
+    }
+    return true;
   }
 })
 // 在 computeStats 函数中增强对 active_period 的处理
@@ -268,29 +281,36 @@ setInterval(() => {
   }
 }, 5000); // 每5秒检查一次网络状态
 // --------------------- 页面 session 监听 ---------------------
+// 在 pageSessions 对象中添加 tabId 生成逻辑
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   try {
     if (changeInfo.status === 'loading') {
       const now = Date.now()
-      if (pageSessions[tabId]) {
-        const old = pageSessions[tabId]
-        if (old.url)
-          sendEvent({
-            type: 'page_close',
-            url: old.url,
-            title: old.title,
-            ts: now,
-          })
-      }
-      if (tab && tab.url) {
-        pageSessions[tabId] = { url: tab.url, title: tab.title, start: now }
-        sendEvent({
-          type: 'page_open',
+      // 检查是否已有该 tab 的会话，如果没有则创建新的 tabId
+      if (!pageSessions[tabId]) {
+        pageSessions[tabId] = {
+          tabId: tabId,
+          sessionId: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString() + '-' + tabId,
           url: tab.url,
           title: tab.title,
-          ts: now,
-        })
+          start: now
+        }
+      } else {
+        // 更新现有会话信息
+        pageSessions[tabId].url = tab.url
+        pageSessions[tabId].title = tab.title
+        pageSessions[tabId].start = now
       }
+
+      // 发送 page_open 事件时包含 session 信息
+      sendEvent({
+        type: 'page_open',
+        url: tab.url,
+        title: tab.title,
+        tabId: tabId,
+        sessionId: pageSessions[tabId].sessionId,
+        ts: now,
+      })
     }
   } catch (e) {
     console.error('tabs.onUpdated error', e)
@@ -317,12 +337,19 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 })
 
 // --------------------- 事件存储 ---------------------
+// 修改 sendEvent 函数以支持 session 信息
 function sendEvent (evt) {
   try {
     if (!evt || typeof evt !== 'object') return
     evt.event_id = crypto.randomUUID
       ? crypto.randomUUID()
       : Date.now().toString() + Math.random().toString(36)
+
+    // 如果事件没有 session 信息但应该有，则从 pageSessions 获取
+    if (!evt.sessionId && evt.tabId && pageSessions[evt.tabId]) {
+      evt.sessionId = pageSessions[evt.tabId].sessionId;
+    }
+
     idbAdd(evt).catch((e) => console.error('idbAdd error in sendEvent', e))
   } catch (e) {
     console.error('sendEvent error', e)
