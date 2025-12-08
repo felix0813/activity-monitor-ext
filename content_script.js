@@ -13,6 +13,9 @@
       currentSessionId = response.sessionId;
       currentTabId = response.tabId;
     }
+    // page_open
+    send(makeEvent('page_open'));
+
   });
   function makeEvent (type, extra = {}) {
     return Object.assign({
@@ -56,10 +59,6 @@
       activeStart = null;
     }
   }
-
-  // page_open
-  send(makeEvent('page_open'));
-
   // setup initial active state
   startActiveIfNeeded();
 

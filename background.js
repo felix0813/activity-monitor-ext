@@ -2,12 +2,12 @@
 // Responsibilities remain the same but Native Messaging removed
 // 在文件顶部添加
 chrome.runtime.onStartup.addListener(() => {
-  console.log('Activity Monitor extension started');
-});
+  console.log('Activity Monitor extension started')
+})
 // 添加扩展安装/更新处理
 chrome.runtime.onInstalled.addListener((details) => {
-  console.log('Activity Monitor extension installed/updated', details.reason);
-});
+  console.log('Activity Monitor extension installed/updated', details.reason)
+})
 importScripts('idb.js') // load idb helper
 
 const FLUSH_INTERVAL_MS = 15000 // batch flush interval
@@ -49,8 +49,13 @@ function connectWebSocket () {
 
       if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         reconnectAttempts++
-        const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts), 30000)
-        console.log(`Attempting to reconnect WebSocket in ${delay}ms (attempt ${reconnectAttempts})`)
+        const delay = Math.min(
+          BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts),
+          30000
+        )
+        console.log(
+          `Attempting to reconnect WebSocket in ${delay}ms (attempt ${reconnectAttempts})`
+        )
         setTimeout(connectWebSocket, delay)
       } else {
         console.error('Max WebSocket reconnection attempts reached')
@@ -136,7 +141,7 @@ async function flushBatch () {
     if (events.length === 0) return
 
     // 为批次创建唯一标识符用于重试跟踪
-    const batchKey = batch.map(x => x._id).join(',')
+    const batchKey = batch.map((x) => x._id).join(',')
 
     const payload = {
       batch_id: 'batch-' + new Date().toISOString(),
@@ -159,19 +164,27 @@ async function flushBatch () {
         await idbDeleteBatchByKeys(keys)
         batchRetryCounts.delete(batchKey)
       }
-      console.log(`Batch of ${events.length} events sent via ${result.method} and deleted from IDB`)
+      console.log(
+        `Batch of ${events.length} events sent via ${result.method} and deleted from IDB`
+      )
     } else {
       // 发送失败，增加重试计数
       const currentRetries = batchRetryCounts.get(batchKey) || 0
       const newRetries = currentRetries + 1
 
       if (newRetries >= BATCH_RETRY_LIMIT) {
-        console.error(`Batch failed after ${BATCH_RETRY_LIMIT} retries, marking as permanently failed`, result.error)
+        console.error(
+          `Batch failed after ${BATCH_RETRY_LIMIT} retries, marking as permanently failed`,
+          result.error
+        )
         batchRetryCounts.delete(batchKey)
         // 可以考虑将失败的数据移动到单独的"失败队列"表中
       } else {
         batchRetryCounts.set(batchKey, newRetries)
-        console.warn(`Failed to send batch (attempt ${newRetries}/${BATCH_RETRY_LIMIT}), will retry later`, result.error)
+        console.warn(
+          `Failed to send batch (attempt ${newRetries}/${BATCH_RETRY_LIMIT}), will retry later`,
+          result.error
+        )
       }
     }
   } catch (e) {
@@ -206,49 +219,50 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true
   } else if (msg && msg.type === 'get_session_info') {
     // 返回当前 tab 的 session 信息
-    const tabId = sender.tab?.id;
+    const tabId = sender.tab?.id
     if (tabId && pageSessions[tabId]) {
       sendResponse({
         sessionId: pageSessions[tabId].sessionId,
-        tabId: tabId
-      });
+        tabId: tabId,
+      })
     } else {
-      sendResponse({ sessionId: null, tabId: tabId });
+      sendResponse({ sessionId: null, tabId: tabId })
     }
-    return true;
+    return true
   }
 })
 // 在 computeStats 函数中增强对 active_period 的处理
 async function computeStats () {
   try {
-    const all = await idbGetAll();
+    const all = await idbGetAll()
     const stats = {
       total_events: all ? all.length : 0,
       events_by_type: {},
       active_time_by_url: {},
-      total_active_time: 0 // 添加总活跃时间统计
-    };
+      total_active_time: 0, // 添加总活跃时间统计
+    }
 
     if (!all || !Array.isArray(all)) {
-      return stats;
+      return stats
     }
 
     for (const e of all) {
-      if (!e) continue;
+      if (!e) continue
 
-      const t = (e.type || 'unknown').toString();
-      stats.events_by_type[t] = (stats.events_by_type[t] || 0) + 1;
+      const t = (e.type || 'unknown').toString()
+      stats.events_by_type[t] = (stats.events_by_type[t] || 0) + 1
 
       if (t === 'active_period' && typeof e.duration === 'number') {
-        const u = (e.url || 'unknown').toString();
-        stats.active_time_by_url[u] = (stats.active_time_by_url[u] || 0) + e.duration;
-        stats.total_active_time += e.duration;
+        const u = (e.url || 'unknown').toString()
+        stats.active_time_by_url[u] =
+          (stats.active_time_by_url[u] || 0) + e.duration
+        stats.total_active_time += e.duration
       }
     }
-    return stats;
+    return stats
   } catch (e) {
-    console.error('Error computing stats:', e);
-    throw new Error(`Failed to compute stats: ${e.message}`);
+    console.error('Error computing stats:', e)
+    throw new Error(`Failed to compute stats: ${e.message}`)
   }
 }
 // 检测网络状态变化
@@ -257,31 +271,31 @@ let isOnline = navigator.onLine
 chrome.runtime.onStartup.addListener(() => {
   // 检查网络状态
   if (navigator.onLine) {
-    console.log('Extension started with network connection');
-    reconnectAttempts = 0;
-    connectWebSocket();
+    console.log('Extension started with network connection')
+    reconnectAttempts = 0
+    connectWebSocket()
   } else {
-    console.log('Extension started without network connection');
+    console.log('Extension started without network connection')
   }
-});
+})
 
 // 可以通过定期检查网络状态来替代 online/offline 事件
 setInterval(() => {
-  const currentlyOnline = navigator.onLine;
+  const currentlyOnline = navigator.onLine
   if (currentlyOnline !== isOnline) {
-    isOnline = currentlyOnline;
-    console.log(`Network status changed: ${isOnline ? 'Online' : 'Offline'}`);
+    isOnline = currentlyOnline
+    console.log(`Network status changed: ${isOnline ? 'Online' : 'Offline'}`)
 
     if (isOnline && !wsConnected) {
-      reconnectAttempts = 0;
-      connectWebSocket();
+      reconnectAttempts = 0
+      connectWebSocket()
     } else if (!isOnline && ws) {
-      ws.close();
+      ws.close()
     }
   }
-}, 5000); // 每5秒检查一次网络状态
+}, 5000) // 每5秒检查一次网络状态
 // --------------------- 页面 session 监听 ---------------------
-// 在 pageSessions 对象中添加 tabId 生成逻辑
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   try {
     if (changeInfo.status === 'loading') {
@@ -307,8 +321,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         type: 'page_open',
         url: tab.url,
         title: tab.title,
-        tabId: tabId,
-        sessionId: pageSessions[tabId].sessionId,
+        tab_id: tabId,
+        session_id: pageSessions[tabId].sessionId,
         ts: now,
       })
     }
@@ -317,6 +331,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 })
 
+// 修改 tabs.onRemoved 监听器
 chrome.tabs.onRemoved.addListener((tabId) => {
   try {
     const now = Date.now()
@@ -327,6 +342,8 @@ chrome.tabs.onRemoved.addListener((tabId) => {
           type: 'page_close',
           url: old.url,
           title: old.title,
+          tab_id: tabId,
+          session_id: old.sessionId,
           ts: now,
         })
       delete pageSessions[tabId]
@@ -337,7 +354,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 })
 
 // --------------------- 事件存储 ---------------------
-// 修改 sendEvent 函数以支持 session 信息
+// 修改 sendEvent 函数以确保包含所有必要字段
 function sendEvent (evt) {
   try {
     if (!evt || typeof evt !== 'object') return
@@ -345,9 +362,27 @@ function sendEvent (evt) {
       ? crypto.randomUUID()
       : Date.now().toString() + Math.random().toString(36)
 
-    // 如果事件没有 session 信息但应该有，则从 pageSessions 获取
-    if (!evt.sessionId && evt.tabId && pageSessions[evt.tabId]) {
-      evt.sessionId = pageSessions[evt.tabId].sessionId;
+    // 确保事件包含 tab_id 和 session_id
+    if (!evt.tab_id && evt.tabId) {
+      evt.tab_id = evt.tabId
+      delete evt.tabId
+    }
+
+    if (!evt.tab_id && evt.sessionId) {
+      // 如果有 sessionId 但没有 tab_id，从 pageSessions 查找
+      for (const [tabId, session] of Object.entries(pageSessions)) {
+        if (session.sessionId === evt.sessionId) {
+          evt.tab_id = parseInt(tabId)
+          break
+        }
+      }
+    }
+
+    if (!evt.session_id && evt.sessionId) {
+      evt.session_id = evt.sessionId
+      delete evt.sessionId
+    } else if (!evt.session_id && evt.tab_id && pageSessions[evt.tab_id]) {
+      evt.session_id = pageSessions[evt.tab_id].sessionId
     }
 
     idbAdd(evt).catch((e) => console.error('idbAdd error in sendEvent', e))
@@ -377,13 +412,17 @@ async function initializeBackgroundWorker () {
 
   // 检查待发送数据
   try {
-    const pendingCount = await idbGetAll().then(events => events ? events.length : 0)
+    const pendingCount = await idbGetAll().then((events) =>
+      events ? events.length : 0
+    )
     console.log(`Found ${pendingCount} pending events in database`)
   } catch (error) {
     console.warn('Could not check pending events count:', error)
   }
 
-  console.log('Activity Monitor background worker initialized (HTTP/WebSocket mode)')
+  console.log(
+    'Activity Monitor background worker initialized (HTTP/WebSocket mode)'
+  )
 }
 
 // 使用初始化函数替代直接调用
